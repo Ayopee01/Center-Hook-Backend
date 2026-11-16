@@ -1,0 +1,300 @@
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: AccessToken จาก POST /api/auth/login หรือ POST /api/auth/refresh
+  headers:
+    RateLimitLimit:
+      description: จำนวน request สูงสุดต่อช่วงเวลา (RATE_LIMIT_MAX_REQUESTS)
+      schema:
+        type: integer
+        example: 300
+    RateLimitRemaining:
+      description: จำนวน request ที่เหลือในช่วงเวลาปัจจุบัน
+      schema:
+        type: integer
+        example: 0
+    RateLimitReset:
+      description: จำนวนวินาทีที่เหลือก่อนตัวนับรีเซ็ต
+      schema:
+        type: integer
+        example: 42
+    RetryAfter:
+      description: จำนวนวินาทีที่ควรรอก่อนลองใหม่
+      schema:
+        type: integer
+        example: 42
+  responses:
+    ValidationError:
+      description: ข้อมูลไม่ผ่านการตรวจสอบ (VALIDATION_ERROR)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+    Unauthorized:
+      description: ไม่มี token, token ผิดรูปแบบ/หมดอายุ หรือ session ถูก revoke แล้ว (INVALID_TOKEN)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            status_code: 401
+            code: INVALID_TOKEN
+            message: Invalid or expired token.
+            request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+    Forbidden:
+      description: ไม่มีสิทธิ์ที่ route ต้องการ (FORBIDDEN)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            status_code: 403
+            code: FORBIDDEN
+            message: Permission denied.
+            request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+    RateLimited:
+      description: >-
+        เรียกเกินเพดานภายใน RATE_LIMIT_WINDOW_MS (RATE_LIMITED) นับต่อ IP แยกตามกลุ่ม route
+        (/api/auth, /api/accounts, /api/forward-logs, /api-docs) ยกเว้น /api/auth ที่มี username ใน body นับต่อบัญชี
+        และ login มีเพดานต่อ IP รวมทุกบัญชีอีกชั้น (AUTH_LOGIN_RATE_LIMIT_MAX_PER_IP) ซึ่งตอบ 429 แบบไม่มี Retry-After
+      headers:
+        RateLimit-Limit:
+          $ref: "#/components/headers/RateLimitLimit"
+        RateLimit-Remaining:
+          $ref: "#/components/headers/RateLimitRemaining"
+        RateLimit-Reset:
+          $ref: "#/components/headers/RateLimitReset"
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            status_code: 429
+            code: RATE_LIMITED
+            message: Too many requests.
+            request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - status_code
+        - code
+        - message
+      properties:
+        status_code:
+          type: integer
+          description: รหัสสถานะ HTTP
+          example: 401
+        code:
+          type: string
+          description: รหัสผลลัพธ์
+          example: INVALID_TOKEN
+        message:
+          type: string
+          description: ข้อความอธิบาย
+          example: Invalid or expired token.
+        request_id:
+          type: string
+          description: ค่าเดียวกับ response header X-Request-Id ใช้ค้น log
+          example: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+    ValidationErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorResponse"
+        - type: object
+          properties:
+            validation_errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    nullable: true
+                    example: username
+                  message:
+                    type: string
+                    example: Too small
+      example:
+        status_code: 400
+        code: VALIDATION_ERROR
+        message: Invalid request data.
+        request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+        validation_errors:
+          - field: username
+            message: Too small
+    AuthTokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          enum:
+            - Bearer
+        expires_in:
+          type: integer
+          description: อายุ AccessToken (วินาที) ตาม JWT_ACCESS_EXPIRES_IN
+          example: 900
+    MeResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: owner
+        full_name:
+          type: string
+          example: Center Hook Owner
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+        permissions:
+          type: array
+          description: owner มี forward_logs:read และ accounts:create, admin มีแค่ forward_logs:read
+          items:
+            type: string
+            enum:
+              - forward_logs:read
+              - accounts:create
+    AccountResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        username:
+          type: string
+          example: admin01
+        full_name:
+          type: string
+          example: Somchai Admin
+        role:
+          type: string
+          enum:
+            - admin
+        status:
+          type: string
+          example: active
+        created_at:
+          type: string
+          format: date-time
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Logged out.
+    ForwardLogSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        request_id:
+          type: string
+          description: ID ของ webhook request ที่รับจาก LINE (event จาก request เดียวกันใช้ค่าเดียวกัน)
+          example: 9d1c0e5a-2b7f-4b9a-8a51-0c1f7d6e4a22
+        webhook_event_id:
+          type: string
+          nullable: true
+          example: 01HZXK9V3M7Q2B8N4R6T5Y1W0E
+        project:
+          type: string
+          description: ชื่อ project ปลายทางที่ event ถูกส่งไป
+          example: labor
+        target_url:
+          type: string
+          nullable: true
+          example: https://labor.example.com/api/line/webhook
+        line_user_id:
+          type: string
+          nullable: true
+          example: U4af4980629...
+        event_type:
+          type: string
+          example: message
+        message_type:
+          type: string
+          nullable: true
+          example: text
+        content:
+          type: string
+          nullable: true
+          description: ข้อความ, postback data หรือ [ชนิดข้อความ] (ตัดความยาวแล้ว)
+          example: สวัสดี
+        status:
+          type: string
+          enum:
+            - SUCCESS
+            - FAILED
+            - SKIPPED
+          description: SKIPPED = ไม่ได้ตั้ง URL ของ project ปลายทาง
+        http_status:
+          type: integer
+          nullable: true
+          example: 200
+        error_message:
+          type: string
+          nullable: true
+          example: null
+        attempts:
+          type: integer
+          example: 1
+        duration_ms:
+          type: integer
+          example: 84
+        forwarded_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    ForwardLog:
+      allOf:
+        - $ref: "#/components/schemas/ForwardLogSummary"
+        - type: object
+          properties:
+            payload:
+              type: object
+              description: LINE event ตัวเต็มที่ส่งต่อ
+              additionalProperties: true
+            response_body:
+              type: string
+              nullable: true
+              description: Response body จากปลายทาง (ตัดความยาวแล้ว)
+    ForwardLogListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ForwardLogSummary"
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 135
+            total_pages:
+              type: integer
+              example: 7

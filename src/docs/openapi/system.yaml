@@ -1,0 +1,51 @@
+paths:
+  /livez:
+    get:
+      tags:
+        - System
+      summary: ตรวจว่า process ยังทำงานอยู่
+      description: ตอบทันทีโดยไม่แตะ database ใช้กับ health check ของ container
+      responses:
+        "200":
+          description: Process ยังทำงานอยู่
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /readyz:
+    get:
+      tags:
+        - System
+      summary: ตรวจความพร้อมของ database
+      description: ใช้ตรวจ readiness ว่า service เชื่อมต่อ database ได้และพร้อมรับ traffic
+      responses:
+        "200":
+          description: Database เชื่อมต่อได้
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  database:
+                    type: string
+                    example: ok
+        "503":
+          description: Database เชื่อมต่อไม่ได้
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: error
+                  database:
+                    type: string
+                    example: unavailable

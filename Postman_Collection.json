@@ -1,0 +1,749 @@
+{
+  "info": {
+    "name": "Center Hook",
+    "description": "Postman collection ของ Center Hook (LINE webhook router)\n\nเริ่มใช้: ตั้ง baseUrl ให้ตรงกับ PORT ของ server (ค่าเริ่มต้น http://localhost:8080) แล้วรัน Auth > Login (Owner) ก่อน ระบบจะเก็บ accessToken/refreshToken ลง collection variable ให้อัตโนมัติ\nRequest ที่ต้อง login ใช้ Authorization: Bearer {{accessToken}}\n\nRole: owner (มีคนเดียวจาก seed) มีสิทธิ์ forward_logs:read + accounts:create ส่วน admin มีแค่ forward_logs:read\nRate limit: /api/auth, /api/accounts, /api/forward-logs, /api-docs จำกัด RATE_LIMIT_MAX_REQUESTS ต่อ RATE_LIMIT_WINDOW_MS เกินตอบ 429 RATE_LIMITED\nError ทุกตัวมีรูปแบบ { status_code, code, message, request_id }",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "ownerUsername",
+      "value": "owner"
+    },
+    {
+      "key": "ownerPassword",
+      "value": "Owner@123456"
+    },
+    {
+      "key": "adminUsername",
+      "value": "admin01"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin@123456"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "forwardLogId",
+      "value": "1"
+    },
+    {
+      "key": "lineChannelSecret",
+      "value": "",
+      "description": "ค่าเดียวกับ LINE_CHANNEL_SECRET ของ server ใช้เซ็น x-line-signature ให้ request LINE Webhook"
+    },
+    {
+      "key": "apiDocsUsername",
+      "value": ""
+    },
+    {
+      "key": "apiDocsPassword",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "GET /livez",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/livez",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "livez"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. ตอบ { status: ok } ทันทีโดยไม่แตะ database ใช้กับ health check ของ container"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /readyz",
+          "event": [],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/readyz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "readyz"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. ตรวจการเชื่อมต่อ database: 200 { status: ok, database: ok } หรือ 503 { status: error, database: unavailable }"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /api/auth/login (Owner)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "if (data.access_token) {",
+                  "  pm.collectionVariables.set('accessToken', data.access_token);",
+                  "  pm.collectionVariables.set('refreshToken', data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{ownerUsername}}\",\n  \"password\": \"{{ownerPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. Login ด้วยบัญชี owner แล้วเก็บ accessToken/refreshToken ลง collection variable\n401 INVALID_CREDENTIALS เมื่อ username/password ผิด หรือบัญชีถูกปิดใช้งาน\nหนึ่งบัญชีมี session เดียว login ใหม่จะ revoke session เดิม"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/auth/login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "if (data.access_token) {",
+                  "  pm.collectionVariables.set('accessToken', data.access_token);",
+                  "  pm.collectionVariables.set('refreshToken', data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. Login ด้วยบัญชี admin (สร้างก่อนด้วย Accounts > Create Admin) แล้วเก็บ token ลง collection variable ใช้ทดสอบว่า admin สร้างบัญชีไม่ได้ (403)"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/auth/refresh",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "if (data.access_token) {",
+                  "  pm.collectionVariables.set('accessToken', data.access_token);",
+                  "  pm.collectionVariables.set('refreshToken', data.refresh_token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Public. แลก refresh token เป็น token ชุดใหม่ (หมุน refresh token ทุกครั้ง ตัวเก่าใช้ซ้ำไม่ได้)\n401 INVALID_REFRESH_TOKEN, 423 ACCOUNT_INACTIVE"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/auth/me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Bearer. ข้อมูลบัญชีที่ login อยู่ พร้อม role และ permissions"
+          },
+          "response": []
+        },
+        {
+          "name": "POST /api/auth/logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('accessToken', '');",
+                  "pm.collectionVariables.set('refreshToken', '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Bearer. Revoke session ปัจจุบัน แล้วล้าง token ใน collection variable"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "POST /api/accounts (Create Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 201 or 409 (already exists)', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{adminUsername}}\",\n  \"password\": \"{{adminPassword}}\",\n  \"full_name\": \"Center Hook Admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "accounts"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Bearer + accounts:create (owner เท่านั้น). สร้างบัญชี role admin เสมอ (ส่ง role มาก็ไม่ใช้)\nusername 3-100 ตัว (A-Z a-z 0-9 . _ -), password 8-128 ตัว, full_name ห้ามว่าง\n201 สำเร็จ, 400 VALIDATION_ERROR, 403 FORBIDDEN เมื่อ admin เรียก, 409 USERNAME_TAKEN"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Forward Logs",
+      "item": [
+        {
+          "name": "GET /api/forward-logs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "const first = pm.response.json().data?.[0];",
+                  "if (first) pm.collectionVariables.set('forwardLogId', String(first.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/forward-logs?page=1&limit=20&status=FAILED&project=labor&line_user_id=&event_type=message&from=2026-11-01&to=2026-11-30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "forward-logs"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "FAILED",
+                  "disabled": true,
+                  "description": "SUCCESS | FAILED | SKIPPED"
+                },
+                {
+                  "key": "project",
+                  "value": "labor",
+                  "disabled": true
+                },
+                {
+                  "key": "line_user_id",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "event_type",
+                  "value": "message",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "2026-11-01",
+                  "disabled": true,
+                  "description": "ISO date หรือ datetime"
+                },
+                {
+                  "key": "to",
+                  "value": "2026-11-30",
+                  "disabled": true,
+                  "description": "ISO date หรือ datetime"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Bearer + forward_logs:read. รายการ forward log แบบแบ่งหน้า (ไม่มี payload/response_body) เปิด query ที่ต้องการกรองได้ limit สูงสุด 100\nเก็บ id ของรายการแรกลง forwardLogId ให้ request ถัดไป"
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/forward-logs/:id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/forward-logs/{{forwardLogId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "forward-logs",
+                "{{forwardLogId}}"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Bearer + forward_logs:read. forward log หนึ่งรายการพร้อม payload และ response_body เต็ม\n404 FORWARD_LOG_NOT_FOUND"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "LINE",
+      "item": [
+        {
+          "name": "POST /api/line/webhook",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// เซ็น raw body ด้วย channel secret (HMAC-SHA256 แบบ base64) เหมือน LINE",
+                  "const secret = pm.variables.get('lineChannelSecret');",
+                  "const body = pm.variables.replaceIn(pm.request.body.raw);",
+                  "const signature = CryptoJS.HmacSHA256(body, secret || '').toString(CryptoJS.enc.Base64);",
+                  "pm.variables.set('lineSignature', signature);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "x-line-signature",
+                "value": "{{lineSignature}}",
+                "type": "text",
+                "description": "สร้างอัตโนมัติจาก pre-request script"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination\": \"U0123456789abcdef0123456789abcdef\",\n  \"events\": [\n    {\n      \"type\": \"message\",\n      \"mode\": \"active\",\n      \"timestamp\": 1763270000000,\n      \"webhookEventId\": \"01POSTMANTESTEVENT000000000\",\n      \"deliveryContext\": {\n        \"isRedelivery\": false\n      },\n      \"replyToken\": \"00000000000000000000000000000000\",\n      \"source\": {\n        \"type\": \"user\",\n        \"userId\": \"U00000000000000000000000000000000\"\n      },\n      \"message\": {\n        \"id\": \"1\",\n        \"type\": \"text\",\n        \"text\": \"test from postman\"\n      }\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/line/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "line",
+                "webhook"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "LINE signature. จำลอง LINE ส่ง webhook มาที่ center-hook ตั้ง lineChannelSecret ให้ตรงกับ LINE_CHANNEL_SECRET ของ server ก่อน pre-request script จะเซ็น body ให้\nตอบ 200 { message, received } ทันที แล้วส่งต่อไป project ปลายทางเบื้องหลัง ดูผลที่ Forward Logs\n401 INVALID_LINE_SIGNATURE, 503 LINE_WEBHOOK_NOT_CONFIGURED\nข้อควรระวัง: event นี้ถูกส่งต่อไปปลายทางจริงตาม LABOR_WEBHOOK_URL / WEBHOOK_URL"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "API Docs",
+      "item": [
+        {
+          "name": "GET /api-docs/openapi.json",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Request-Id",
+                "value": "{{$guid}}",
+                "type": "text",
+                "description": "ไม่บังคับ ใช้ค้น log ระบบส่งค่ากลับใน response header X-Request-Id และใน error body (request_id)"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api-docs/openapi.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api-docs",
+                "openapi.json"
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{apiDocsUsername}}",
+                  "type": "string"
+                },
+                {
+                  "key": "password",
+                  "value": "{{apiDocsPassword}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "OpenAPI spec (JSON) ถ้า server ตั้ง API_DOCS_USERNAME/API_DOCS_PASSWORD ต้องใส่ apiDocsUsername/apiDocsPassword ให้ตรง (401 API_DOCS_AUTH_REQUIRED)\nหน้า Swagger UI เปิดใน browser ที่ {{baseUrl}}/api-docs"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

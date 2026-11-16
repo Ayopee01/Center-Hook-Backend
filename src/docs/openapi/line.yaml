@@ -1,0 +1,88 @@
+paths:
+  /api/line/webhook:
+    post:
+      tags:
+        - LINE
+      summary: รับ webhook จาก LINE OA
+      description: >-
+        ตั้ง URL นี้เป็น Webhook URL ใน LINE Developers Console ระบบตรวจ x-line-signature ด้วย LINE_CHANNEL_SECRET
+        แล้วตอบ 200 ทันที จากนั้นส่งต่อทีละ event ไป project ปลายทางเบื้องหลัง (เซ็น signature ใหม่ด้วย secret เดิม)
+        และบันทึกผลลง forward log ไม่มี rate limit ที่ route นี้ เรียกจาก Swagger โดยตรงจะไม่ผ่านเพราะต้องมี signature ที่ถูกต้อง
+      parameters:
+        - in: header
+          name: x-line-signature
+          required: true
+          schema:
+            type: string
+          description: HMAC-SHA256 ของ raw body ด้วย channel secret แบบ base64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                destination:
+                  type: string
+                  example: U0123456789abcdef0123456789abcdef
+                events:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+              example:
+                destination: U0123456789abcdef0123456789abcdef
+                events:
+                  - type: message
+                    webhookEventId: 01HZXK9V3M7Q2B8N4R6T5Y1W0E
+                    replyToken: 0f3779fba3b349968c5d07db31eab56f
+                    source:
+                      type: user
+                      userId: U4af4980629...
+                    message:
+                      type: text
+                      text: สวัสดี
+      responses:
+        "200":
+          description: รับ webhook แล้ว (การส่งต่อทำเบื้องหลัง ดูผลที่ GET /api/forward-logs)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: LINE webhook received.
+                  received:
+                    type: integer
+                    description: จำนวน event ใน request
+                    example: 1
+        "400":
+          description: Body ไม่ใช่ JSON object (VALIDATION_ERROR)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: ไม่มีหรือ signature ไม่ถูกต้อง (INVALID_LINE_SIGNATURE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status_code: 401
+                code: INVALID_LINE_SIGNATURE
+                message: LINE signature is invalid.
+                request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+        "413":
+          description: Body ใหญ่เกิน 1MB (PAYLOAD_TOO_LARGE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: ยังไม่ได้ตั้ง LINE_CHANNEL_SECRET (LINE_WEBHOOK_NOT_CONFIGURED)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

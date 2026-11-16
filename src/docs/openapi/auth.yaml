@@ -1,0 +1,130 @@
+paths:
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: เข้าสู่ระบบด้วย username/password
+      description: >-
+        หนึ่งบัญชีมีได้ session เดียว login ใหม่จะ revoke session เดิมทันที (token ชุดเก่าใช้ต่อไม่ได้)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  example: owner
+                password:
+                  type: string
+                  format: password
+                  example: Owner@123456
+      responses:
+        "200":
+          description: เข้าสู่ระบบสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          description: username หรือ password ไม่ถูกต้อง หรือบัญชีถูกปิดใช้งาน (INVALID_CREDENTIALS)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status_code: 401
+                code: INVALID_CREDENTIALS
+                message: Invalid username or password.
+                request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: ขอ token ชุดใหม่ด้วย refresh token
+      description: หมุน refresh token ทุกครั้ง refresh token ที่ใช้แล้วจะใช้ซ้ำไม่ได้
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - refresh_token
+              properties:
+                refresh_token:
+                  type: string
+                  example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        "200":
+          description: ออก token ชุดใหม่สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthTokenResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          description: refresh token ไม่ถูกต้อง หมดอายุ หรือถูกใช้ไปแล้ว (INVALID_REFRESH_TOKEN)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status_code: 401
+                code: INVALID_REFRESH_TOKEN
+                message: Invalid refresh token.
+                request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+        "423":
+          description: บัญชีถูกปิดใช้งาน (ACCOUNT_INACTIVE)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: ออกจากระบบ
+      description: Revoke session ปัจจุบัน access/refresh token ของ session นี้ใช้ต่อไม่ได้
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: ออกจากระบบสำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: ดูข้อมูลบัญชีที่ login อยู่
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: ข้อมูลบัญชีพร้อมสิทธิ์
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"

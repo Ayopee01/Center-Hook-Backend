@@ -1,0 +1,64 @@
+paths:
+  /api/accounts:
+    post:
+      tags:
+        - Accounts
+      summary: สร้างบัญชี admin
+      description: >-
+        ต้องมีสิทธิ์ accounts:create ซึ่งมีเฉพาะ owner (admin สร้างบัญชีไม่ได้) บัญชีที่สร้างจะเป็น role admin เสมอ
+        เพราะ owner มีคนเดียวและสร้างจาก seed เท่านั้น
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+                - full_name
+              properties:
+                username:
+                  type: string
+                  minLength: 3
+                  maxLength: 100
+                  pattern: "^[A-Za-z0-9._-]+$"
+                  example: admin01
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  maxLength: 128
+                  example: Admin@123456
+                full_name:
+                  type: string
+                  maxLength: 255
+                  example: Somchai Admin
+      responses:
+        "201":
+          description: สร้างบัญชี admin สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Username ถูกใช้แล้ว (USERNAME_TAKEN)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                status_code: 409
+                code: USERNAME_TAKEN
+                message: Username is already taken.
+                request_id: 2f0c6a1e-6c55-4b8e-9b9e-3d7e0f6d2a10
+        "429":
+          $ref: "#/components/responses/RateLimited"
